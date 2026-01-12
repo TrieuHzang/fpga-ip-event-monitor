@@ -1,0 +1,73 @@
+#include "xil_io.h"
+#include "xparameters.h"
+#include "xil_printf.h"
+#include "xil_types.h"
+
+#define EVENT_BASE XPAR_AXI_EVENT_MONITOR_0_S_AXI_BASEADDR
+
+#define REG_CTRL       0x00
+#define REG_EVT_EN     0x08
+#define REG_IRQ_EN     0x0C
+#define REG_EVT_CNT    0x10
+#define REG_TIME_L     0x18
+#define REG_TIME_H     0x1C
+#define REG_THRESHOLD  0x20
+#define REG_IRQ_STAT   0x24
+
+static void delay_ms(u32 ms)
+{
+    volatile u32 i, j;
+    for (i = 0; i < ms; i++)
+        for (j = 0; j < 10000; j++);
+}
+
+void event_monitor_init()
+{
+    Xil_Out32(EVENT_BASE + REG_CTRL, 0x0);
+    Xil_Out32(EVENT_BASE + REG_EVT_EN, 0x1);
+    Xil_Out32(EVENT_BASE + REG_IRQ_EN, 0x1);
+    Xil_Out32(EVENT_BASE + REG_THRESHOLD, 3);
+    Xil_Out32(EVENT_BASE + REG_CTRL, 0x1);
+
+    xil_printf("Event monitor initialized\r\n");
+    xil_printf("EVT_EN=1, IRQ_EN=1, THRESHOLD=3\r\n");
+}
+
+int main()
+{
+    u32 cnt, irq;
+    u32 last_cnt = 0;
+    u32 time_l, time_h;
+    u64 event_time;
+    xil_printf("=== Event Monitor Demo Start ===\r\n");
+    event_monitor_init();
+    while (1)
+    {
+        cnt = Xil_In32(EVENT_BASE + REG_EVT_CNT);
+        irq = Xil_In32(EVENT_BASE + REG_IRQ_STAT);
+
+        if (cnt != last_cnt)
+        {
+            time_l = Xil_In32(EVENT_BASE + REG_TIME_L);
+            time_h = Xil_In32(EVENT_BASE + REG_TIME_H);
+            event_time = ((u64)time_h << 32) | time_l;
+
+            xil_printf("CNT=%u TIME=%u IRQ=%u\r\n",
+                       cnt, event_time, irq);
+
+            last_cnt = cnt;
+            last_irq = irq;
+        }
+        if (irq)
+        {
+            xil_printf(">>> IRQ TRIGGERED! Count=%u Time=%u <<<\r\n",
+                       cnt, event_time);
+
+            Xil_Out32(EVENT_BASE + REG_CTRL, 0x0);
+            Xil_Out32(EVENT_BASE + REG_CTRL, 0x1);
+        }
+
+        delay_ms(100);
+    }
+}
+
